@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Image Detector</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #f0f0f5;
+    --text2: #9090a8;
+    --text3: #5c5c78;
+    --accent: #7c6ff7;
+    --accent-dim: rgba(124,111,247,0.15);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 4rem;
+  }
+
+  /* grid bg */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(124,111,247,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,111,247,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { position: relative; z-index: 1; width: 100%; max-width: 620px; }
+
+  /* header */
+  .header { text-align: center; padding: 2rem 0 2.5rem; }
+  .logo-wrap {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 56px; height: 56px; border-radius: 16px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(124,111,247,0.3);
+    margin-bottom: 1.25rem;
+  }
+  .logo-wrap svg { width: 28px; height: 28px; }
+  h1 {
+    font-size: 2rem; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 0%, #9090c8 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subtitle { font-size: 0.9rem; color: var(--text2); margin-top: 0.5rem; line-height: 1.5; }
+
+  /* api key input */
+  .key-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  .key-label {
+    font-size: 0.75rem; font-weight: 600; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    margin-bottom: 0.6rem; display: flex; align-items: center; gap: 6px;
+  }
+  .key-row { display: flex; gap: 8px; }
+  .key-input {
+    flex: 1; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-size: 0.85rem;
+    padding: 0.6rem 0.9rem; outline: none;
+    transition: border-color 0.2s;
+  }
+  .key-input:focus { border-color: var(--accent); }
+  .key-input::placeholder { color: var(--text3); }
+  .save-btn {
+    padding: 0.6rem 1.1rem; border-radius: 8px;
+    background: var(--accent); color: #fff;
+    border: none; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+  .save-btn:hover { opacity: 0.85; }
+  .key-hint { font-size: 0.75rem; color: var(--text3); margin-top: 0.5rem; }
+  .key-hint a { color: var(--accent); text-decoration: none; }
+  .key-hint a:hover { text-decoration: underline; }
+
+  /* upload */
+  .upload-zone {
+    background: var(--surface);
+    border: 2px dashed var(--border2);
+    border-radius: 16px;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    margin-bottom: 1rem;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: var(--accent-dim); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .upload-zone h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
+  .upload-zone p { font-size: 0.8rem; color: var(--text2); }
+
+  /* preview */
+  .preview-section { display: none; margin-bottom: 1rem; }
+  .preview-section.show { display: block; }
+  .preview-box {
+    border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--border);
+    max-height: 300px; display: flex;
+    align-items: center; justify-content: center;
+    background: var(--surface);
+  }
+  .preview-box img { max-width: 100%; max-height: 300px; object-fit: contain; display: block; }
+  .preview-actions { display: flex; gap: 10px; margin-top: 10px; }
+
+  /* buttons */
+  .btn-primary {
+    flex: 1; padding: 0.85rem;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 10px;
+    font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:active { transform: scale(0.99); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary {
+    padding: 0.85rem 1.2rem;
+    background: var(--surface2); color: var(--text2);
+    border: 1px solid var(--border); border-radius: 10px;
+    font-size: 0.9rem; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--border2); color: var(--text); }
+
+  /* loader */
+  .loader { display: none; text-align: center; padding: 2rem; }
+  .loader.show { display: block; }
+  .spinner {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 3px solid var(--border2);
+    border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader p { font-size: 0.875rem; color: var(--text2); }
+
+  /* result */
+  .result-card {
+    display: none; margin-top: 1.5rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+  }
+  .result-card.show { display: block; }
+
+  .verdict-header { padding: 1.5rem; }
+  .verdict-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 0.75rem;
+  }
+  .badge-ai { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+  .badge-real { background: var(--green-dim); color: var(--green); border: 1px solid rgba(52,211,153,0.2); }
+  .badge-uncertain { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(251,191,36,0.2); }
+  .verdict-title { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.3rem; }
+
+  .conf-section { padding: 0 1.5rem 1.5rem; }
+  .conf-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .conf-row span { font-size: 0.8rem; color: var(--text2); }
+  .conf-row strong { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+  .bar-track { height: 8px; background: var(--surface2); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; width: 0%; transition: width 1s cubic-bezier(.4,0,.2,1); }
+  .bar-ai { background: linear-gradient(90deg, #f87171, #ef4444); }
+  .bar-real { background: linear-gradient(90deg, #34d399, #10b981); }
+  .bar-uncertain { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+
+  .divider { height: 1px; background: var(--border); margin: 0; }
+
+  .signals-section { padding: 1.25rem 1.5rem; }
+  .section-label {
+    font-size: 0.7rem; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.75rem;
+  }
+  .signal { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+  .sig-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .sig-red { background: var(--red); }
+  .sig-green { background: var(--green); }
+  .sig-amber { background: var(--amber); }
+  .sig-text { font-size: 0.85rem; color: var(--text2); line-height: 1.5; }
+
+  .reasoning-section {
+    background: var(--surface2); padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .reasoning-text { font-size: 0.85rem; color: var(--text2); line-height: 1.65; }
+
+  /* error */
+  .error-box {
+    display: none; margin-top: 1rem; padding: 1rem 1.1rem;
+    background: var(--red-dim); border: 1px solid rgba(248,113,113,0.2);
+    border-radius: 10px; font-size: 0.85rem; color: var(--red);
+  }
+  .error-box.show { display: block; }
+
+  .footer { text-align: center; margin-top: 3rem; font-size: 0.75rem; color: var(--text3); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="logo-wrap">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#7c6ff7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1>AI Image Detector</h1>
+    <p class="subtitle">Upload any image to find out if it was generated by AI<br>or captured in the real world.</p>
+  </div>
+
+  <!-- API Key -->
+  <div class="key-section">
+    <div class="key-label">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+      Anthropic API Key
+    </div>
+    <div class="key-row">
+      <input class="key-input" id="apiKey" type="password" placeholder="sk-ant-api03-..." />
+      <button class="save-btn" onclick="saveKey()">Save</button>
+    </div>
+    <p class="key-hint">Your key is only stored in your browser. Get one free at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
+  </div>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept="image/*" />
+    <div class="upload-icon">🖼️</div>
+    <h3>Drop an image or click to browse</h3>
+    <p>JPG · PNG · WebP · GIF · up to 10 MB</p>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-section" id="previewSection">
+    <div class="preview-box"><img id="previewImg" src="" alt="Preview" /></div>
+    <div class="preview-actions">
+      <button class="btn-primary" id="analyzeBtn" onclick="analyze()">🔍 Analyze image</button>
+      <button class="btn-secondary" onclick="reset()">↩ Reset</button>
+    </div>
+  </div>
+
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <p>Scanning image for AI artifacts…</p>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+    <div class="verdict-header">
+      <div class="verdict-badge" id="badge"></div>
+      <div class="verdict-title" id="verdictTitle"></div>
+    </div>
+    <div class="conf-section">
+      <div class="conf-row"><span>Confidence</span><strong id="confNum"></strong></div>
+      <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="signals-section">
+      <div class="section-label">Key signals detected</div>
+      <div id="signalsList"></div>
+    </div>
+    <div class="reasoning-section">
+      <div class="section-label" style="margin-bottom:0.5rem">Analysis reasoning</div>
+      <div class="reasoning-text" id="reasoningText"></div>
+    </div>
+  </div>
+
+  <div class="footer">Built with Claude Vision API · Your images are never stored</div>
+</div>
+
+<script>
+let b64 = null, mime = null;
+
+const $ = id => document.getElementById(id);
+
+// load saved key
+window.onload = () => {
+  const k = localStorage.getItem('anthropic_key');
+  if (k) $('apiKey').value = k;
+};
+
+function saveKey() {
+  const k = $('apiKey').value.trim();
+  if (!k.startsWith('sk-ant')) { showErr('Please enter a valid Anthropic API key (starts with sk-ant)'); return; }
+  localStorage.setItem('anthropic_key', k);
+  $('save-btn');
+  alert('API key saved!');
+}
+
+// drag & drop
+const zone = $('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+$('fileInput').addEventListener('change', () => { const f = $('fileInput').files[0]; if (f) loadFile(f); });
+
+function loadFile(file) {
+  if (!file.type.startsWith('image/')) { showErr('Please upload a valid image file.'); return; }
+  if (file.size > 10*1024*1024) { showErr('File is too large. Max 10 MB.'); return; }
+  hideErr(); $('resultCard').classList.remove('show');
+  const r = new FileReader();
+  r.onload = e => {
+    const du = e.target.result;
+    $('previewImg').src = du;
+    $('previewSection').classList.add('show');
+    zone.style.display = 'none';
+    b64 = du.split(',')[1]; mime = file.type;
+  };
+  r.readAsDataURL(file);
+}
+
+function reset() {
+  b64 = null; mime = null;
+  $('previewSection').classList.remove('show');
+  zone.style.display = '';
+  $('resultCard').classList.remove('show');
+  hideErr(); $('fileInput').value = '';
+}
+
+async function analyze() {
+  const key = $('apiKey').value.trim() || localStorage.getItem('anthropic_key');
+  if (!key) { showErr('Please enter your Anthropic API key first.'); return; }
+  if (!b64) { showErr('Please upload an image first.'); return; }
+
+  $('analyzeBtn').disabled = true;
+  $('loader').classList.add('show');
+  $('resultCard').classList.remove('show');
+  hideErr();
+
+  const prompt = `You are an expert forensic image analyst. Analyze this image and respond ONLY with a valid JSON object (no markdown, no backticks):
+
+{
+  "verdict": "AI_GENERATED" or "REAL" or "UNCERTAIN",
+  "confidence": <integer 0-100>,
+  "label": "<short phrase like 'AI generated' or 'Likely authentic' or 'Cannot determine'>",
+  "signals": [
+    {"type": "red", "text": "<AI artifact signal>"},
+    {"type": "green", "text": "<authentic indicator>"},
+    {"type": "amber", "text": "<ambiguous signal>"}
+  ],
+  "reasoning": "<2-3 sentences of technical reasoning>"
+}
+
+red = AI artifact, green = authentic indicator, amber = ambiguous.
+Check: texture coherence, edge artifacts, lighting, anatomy, background, diffusion model signs (over-smooth skin, uncanny symmetry, inconsistent reflections, garbled text).`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-allow-browser': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+
+    const raw = data.content.map(b => b.text||'').join('').replace(/```json|```/g,'').trim();
+    const result = JSON.parse(raw);
+    render(result);
+  } catch(e) {
+    showErr('Error: ' + (e.message || 'Something went wrong. Check your API key and try again.'));
+  } finally {
+    $('analyzeBtn').disabled = false;
+    $('loader').classList.remove('show');
+  }
+}
+
+function render(r) {
+  const cls = r.verdict === 'AI_GENERATED' ? 'ai' : r.verdict === 'REAL' ? 'real' : 'uncertain';
+  const icon = r.verdict === 'AI_GENERATED' ? '⚠ AI Generated' : r.verdict === 'REAL' ? '✓ Authentic' : '? Uncertain';
+
+  $('badge').className = 'verdict-badge badge-' + cls;
+  $('badge').textContent = icon;
+  $('verdictTitle').textContent = r.label || icon;
+  $('confNum').textContent = r.confidence + '%';
+
+  const bar = $('barFill');
+  bar.className = 'bar-fill bar-' + cls;
+  setTimeout(() => bar.style.width = r.confidence + '%', 60);
+
+  const sl = $('signalsList');
+  sl.innerHTML = '';
+  (r.signals || []).forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'signal';
+    d.innerHTML = `<div class="sig-dot sig-${s.type}"></div><div class="sig-text">${s.text}</div>`;
+    sl.appendChild(d);
+  });
+
+  $('reasoningText').textContent = r.reasoning || '';
+  $('resultCard').classList.add('show');
+}
+
+function showErr(m) { const e=$('errorBox'); e.textContent=m; e.classList.add('show'); }
+function hideErr() { $('errorBox').classList.remove('show'); }
+</script>
+</body>
+</html>
